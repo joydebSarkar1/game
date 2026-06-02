@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Mobile Car Racing Game</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    overflow:hidden;
+    background:#111;
+    font-family:Arial,sans-serif;
+}
+
+canvas{
+    display:block;
+    margin:auto;
+    background:#444;
+}
+
+#ui{
+    position:absolute;
+    top:10px;
+    width:100%;
+    text-align:center;
+    color:white;
+    font-size:22px;
+    font-weight:bold;
+    z-index:10;
+}
+
+#controls{
+    position:fixed;
+    bottom:20px;
+    width:100%;
+    display:flex;
+    justify-content:space-between;
+    padding:0 30px;
+}
+
+.controlBtn{
+    width:90px;
+    height:90px;
+    border:none;
+    border-radius:50%;
+    font-size:40px;
+    background:rgba(255,255,255,.85);
+}
+
+#gameOver{
+    display:none;
+    position:absolute;
+    inset:0;
+    background:rgba(0,0,0,.85);
+    color:white;
+    text-align:center;
+    padding-top:150px;
+    z-index:20;
+}
+
+#gameOver h1{
+    color:red;
+    font-size:60px;
+}
+
+#gameOver button{
+    margin-top:20px;
+    padding:12px 25px;
+    font-size:22px;
+}
+</style>
+</head>
+<body>
+
+<div id="ui">
+    Score: <span id="score">0</span>
+    |
+    Level: <span id="level">1</span>
+    |
+    High Score: <span id="highscore">0</span>
+</div>
+
+<div id="gameOver">
+    <h1>GAME OVER</h1>
+    <h2 id="finalScore"></h2>
+    <button onclick="restartGame()">Play Again</button>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<div id="controls">
+    <button id="leftBtn" class="controlBtn">⬅️</button>
+    <button id="rightBtn" class="controlBtn">➡️</button>
+</div>
+
+<script>
+
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+canvas.width = Math.min(window.innerWidth, 500);
+canvas.height = window.innerHeight;
+
+const roadWidth = canvas.width;
+
+const playerImg = new Image();
+playerImg.src = "player-car.png";
+
+const enemyImg = new Image();
+enemyImg.src = "enemy-car.png";
+
+let highScore = localStorage.getItem("carHighScore") || 0;
+document.getElementById("highscore").innerText = highScore;
+
+let gameRunning = true;
+
+let player = {
+    x: roadWidth/2 - 35,
+    y: canvas.height - 160,
+    width:70,
+    height:120,
+    speed:8
+};
+
+let score = 0;
+let level = 1;
+let enemySpeed = 5;
+let enemies = [];
+let keys = {};
+
+let roadLines = [];
+
+for(let i=0;i<12;i++){
+    roadLines.push({
+        x: roadWidth/2 - 5,
+        y: i*100,
+        w:10,
+        h:60
+    });
+}
+
+document.addEventListener("keydown",e=>{
+    keys[e.key]=true;
+});
+
+document.addEventListener("keyup",e=>{
+    keys[e.key]=false;
+});
+
+function setupTouch(btn,key){
+    btn.addEventListener("touchstart",e=>{
+        e.preventDefault();
+        keys[key]=true;
+    });
+
+    btn.addEventListener("touchend",e=>{
+        e.preventDefault();
+        keys[key]=false;
+    });
+}
+
+setupTouch(document.getElementById("leftBtn"),"ArrowLeft");
+setupTouch(document.getElementById("rightBtn"),"ArrowRight");
+
+function createEnemy(){
+
+    let laneX = Math.random() * (roadWidth - 80);
+
+    enemies.push({
+        x: laneX,
+        y: -140,
+        width:70,
+        height:120
+    });
+}
+
+setInterval(()=>{
+    if(gameRunning){
+        createEnemy();
+    }
+},1200);
+
+function drawRoad(){
+
+    ctx.fillStyle="#555";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    ctx.fillStyle="#fff";
+
+    roadLines.forEach(line=>{
+
+        ctx.fillRect(line.x,line.y,line.w,line.h);
+
+        line.y += enemySpeed;
+
+        if(line.y > canvas.height){
+            line.y = -60;
+        }
+    });
+}
+
+function movePlayer(){
+
+    if(keys["ArrowLeft"])
+        player.x -= player.speed;
+
+    if(keys["ArrowRight"])
+        player.x += player.speed;
+
+    if(player.x < 0)
+        player.x = 0;
+
+    if(player.x > roadWidth-player.width)
+        player.x = roadWidth-player.width;
+}
+
+function drawPlayer(){
+
+    if(playerImg.complete){
+        ctx.drawImage(
+            playerImg,
+            player.x,
+            player.y,
+            player.width,
+            player.height
+        );
+    }
+}
+
+function drawEnemies(){
+
+    enemies.forEach((enemy,index)=>{
+
+        enemy.y += enemySpeed;
+
+        if(enemyImg.complete){
+            ctx.drawImage(
+                enemyImg,
+                enemy.x,
+                enemy.y,
+                enemy.width,
+                enemy.height
+            );
+        }
+
+        if(
+            player.x < enemy.x + enemy.width &&
+            player.x + player.width > enemy.x &&
+            player.y < enemy.y + enemy.height &&
+            player.y + player.height > enemy.y
+        ){
+            gameOver();
+        }
+
+        if(enemy.y > canvas.height){
+
+            enemies.splice(index,1);
+
+            score += 10;
+
+            if(score % 100 === 0){
+                level++;
+                enemySpeed += 1;
+            }
+
+            document.getElementById("score").innerText = score;
+            document.getElementById("level").innerText = level;
+        }
+    });
+}
+
+function gameOver(){
+
+    gameRunning = false;
+
+    if(score > highScore){
+
+        highScore = score;
+
+        localStorage.setItem(
+            "carHighScore",
+            highScore
+        );
+
+        document.getElementById("highscore")
+            .innerText = highScore;
+    }
+
+    document.getElementById("finalScore")
+        .innerText = "Score : " + score;
+
+    document.getElementById("gameOver")
+        .style.display = "block";
+}
+
+function restartGame(){
+
+    score = 0;
+    level = 1;
+    enemySpeed = 5;
+    enemies = [];
+
+    player.x = roadWidth/2 - 35;
+
+    document.getElementById("score").innerText = 0;
+    document.getElementById("level").innerText = 1;
+
+    document.getElementById("gameOver")
+        .style.display = "none";
+
+    gameRunning = true;
+
+    animate();
+}
+
+function animate(){
+
+    if(!gameRunning) return;
+
+    ctx.clearRect(
+        0,0,
+        canvas.width,
+        canvas.height
+    );
+
+    drawRoad();
+    movePlayer();
+    drawPlayer();
+    drawEnemies();
+
+    requestAnimationFrame(animate);
+}
+
+animate();
+
+</script>
+</body>
+</html>
